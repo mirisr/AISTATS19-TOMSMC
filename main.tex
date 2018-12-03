@@ -49,10 +49,10 @@
 \usepackage{amssymb}
 \usepackage{amsfonts}
 \usepackage{latexsym}
+
 \input{algorithmic.tex}
 
-
-\newcommand{\theHalgorithm}{\arabic{algorithm}}
+\renewcommand{\theHalgorithm}{\arabic{algorithm}}
 
 
 \newcommand{\SL}{\mathcal{S}}  % set of start locations
@@ -228,6 +228,7 @@ chaser.  The isovist is properly blocked by buildings.}
 
 \section{Background}
 
+\vspace{-0.5em}
 \subsection{Theory of Mind}
 
 Human children develop theory of mind during their
@@ -255,15 +256,17 @@ There has thus far been comparatively little work on modeling theory of mind in 
 
 
 %\vspace{-0.6em}
+\vspace{-0.33em}
 \subsection{Probabilistic Program Inference}
+\vspace{-0.33em}
 
-To represent our generative model cleanly and to perform inference in it, we employ the tools of probabilistic programming \cite{vandemeent2018introduction}. This allows us to define probabilistic models that incorporate recursion, libraries of deterministic primitives, and data structures. %Example languages include Venture~\cite{mansinghka2014venture}, Anglican~\cite{tolpin2016design}, and Church~\cite{goodman08}.
+To represent our generative model cleanly and to perform inference in it, we employ the tools of probabilistic programming \cite{vandemeent2018introduction}. This allows us to define probabilistic models that incorporate control flow, libraries of deterministic primitives, and data structures. %Example languages include Venture~\cite{mansinghka2014venture}, Anglican~\cite{tolpin2016design}, and Church~\cite{goodman08}.
 A probabilistic program is a procedural model that, when run unconditionally, yields a sample from a prior distribution. Running probabilistic programs forward can be quite fast, and is limited only by the native speed of the interpreter for the language.
 
 Inference in probabilistic programming involves reasoning about a target distribution that is conditioned by a likelihood, or more generally a notion of utility \cite{vandemeent2018introduction}.
 Inference for probabilistic programs is difficult because of the flexibility that probabilistic programming languages provide: an inference algorithm must behave reasonably for any program a user wishes to write. Many probabilistic programming systems rely on Monte Carlo methods due to their generality \cite{goodman08,milch05,pfeffer01,standevelopmentteam2014stan,venture}. Methods based on importance sampling and SMC have become particularly popular \cite{murray2013,todeschini2014biips,wood-aistats-2014,goodman2014dippl,ge2016turing}, owing to their simplicity and compositionality \cite{naesseth2015nested}.
 
-For our purposes, the most important feature of probabilistic programming languages is that they allow programmers to freely mix deterministic and stochastic elements, resulting in tremendous modeling flexibility.  This makes it relatively easy to (for example) describe distributions over Rapidly-Exploring Random Tree (RRTs), isovists, or even distributions that involve optimization problems as a subcomponent of the distribution.
+For our purposes, the most important feature of probabilistic programming languages is that they allow us to freely mix deterministic and stochastic elements, resulting in tremendous modeling flexibility.  This makes it relatively easy to (for example) describe distributions over Rapidly-Exploring Random Tree (RRTs), isovists, or even distributions that involve optimization problems as a subcomponent of the distribution.
 
 % --------------------------------------------------------------------------------
 % --------------------------------------------------------------------------------
@@ -273,7 +276,7 @@ For our purposes, the most important feature of probabilistic programming langua
 \section{Simulation Primitives}
 %\vspace{-0.5em}
 
-Although probabilistic programming has previously been used to model theory of mind \cite{baker2009action, stuhlmuller2014reasoning}, past implementations have thus far considered relatively simplistic settings. In this paper we not only model a setting in which agents must reason about future events, but also do so in a manner that involves reasoning about properties of the physical world around them. To enable this type of reasoning, we will employ a number of semi-realistic simulation primitives.
+Although probabilistic programming has previously been used to model theory of mind \cite{stuhlmuller2014reasoning}, past implementations have thus far considered relatively simplistic problems involving a small number of decisions. In this paper, we not only model a setting in which agents must reason about future events, but also do so in a manner that involves reasoning about properties of the physical world around them. To enable this type of reasoning, we will employ a number of semi-realistic simulation primitives.
 
 \textbf{The environment.}  To search for and intercept the runner, the
 chaser requires a representation of the world that allows reasoning
@@ -314,14 +317,14 @@ Fig.~\ref{fig:rrt} (c). The direction of the chaser's line of sight is determine
 
 %\vspace{-0.5em}
 \section{The Chaser-Runner Model}
+\label{sec:tcrm}
 %\vspace{-0.5em}
 
+To model theory of mind, we will develop a nested probabilistic program in which a Chaser plans a trajectory by maximizing the probability of interception relative to imagined runner trajectories. The model for runner trajectories, in turn, assumes that the runner imagines chaser trajectories and avoids paths with a high probability of interception. 
 
-\label{sec:tcrm}
-
-Here we describe the centerpiece of our paper, the \emph{Chaser-Runner model}.  We will primarily describe this model from the perspective
-of the chaser; the runner model differs from the chaser model in that
-the runner wishes to minimize the probability of detection, whereas the chaser wishes to maximize it.
+%We will primarily describe our model from the perspective
+%of the chaser; the runner model differs from the chaser model in that
+%the runner wishes to minimize the probability of detection, whereas the chaser wishes to maximize it.
 Our model has four levels: the \textbf{episode model} samples a sequence of moves by the chaser. Each move is sampled from the \textbf{outermost model}, which describes the
 beliefs of the chaser about the expected utility of moves. This model compares future chaser trajectories to possible runner trajectories and assigns higher probability to trajectories in which the runner is likely to be detected. The runner trajectories are in turn sampled from the  \textbf{middlemost model}, which minimizes detection probability based on imagined chaser trajectories that are sampled from the \textbf{innermost model}.
 %
@@ -329,6 +332,11 @@ These three models work in tandem to create nuanced inferences about
 where the chaser believes the runner might be, and how it ought to 
 counter-plan to maximize probability of detection.
 
+Algorithm~\ref{alg:chaser-runner-programs} shows pseudo-code for the Chaser-Runner model, formulated as nested probabilistic programs, which we refer to as queries. Together, these programs define a planning-as-inference problem \cite{toussaint06} in which queries generate weighted samples, resulting in a nested importance sampling  \cite{naesseth2015nested} scheme that we describe in more detail below.
+
+\textbf{The episode model} initializes the location of the chaser to a specified start location $x^\textsc{c}_1 = x^\textsc{c}_\textsc{start}$. For subsequent time points $t=2 \ldots T$, the model samples a weighted partial trajectory $(x^\textsc{c}_{1:t}, w_t)$ from the outermost \textsc{chaser} model. After the final iteration, the model returns the completed trajectory $x^\textsc{c}_{1:T}$ and the product over incremental weights $w_{1:T}$.
+
+\textbf{The outermost model} describes the chaser's plan for trajectories, given the chaser's belief about possible runner trajectories. The chaser selects a goal location $x^\textsc{c}_\textsc{goal}$ at random and uses the RRT planner to sample a possible future trajectory $x^\textsc{c}_{t:T}$. Note that this trajectory is random, owing to the stochastic nature of the RRT algorithm. In order to evaluate the utility of this trajectory, the chaser imagines a possible runner trajectory by sampling from the middlemost \textsc{runner} model. The chaser then evaluates the utility of the trajectory by using an isovist representation to determine the number of time points $T^\textsc{c}_\textsc{visible}$ during which the runner is visible to the chaser. The chaser then conditions the sampled trajectories by defining a weight $w^\textsc{c} = \exp( \alpha \, T^\textsc{c}_\textsc{visible})$. As we will discuss below, this corresponds to assigning a utility proportional to $T^\textsc{c}_\textsc{visible}$ in a planning-as-inference formulation. The model discards most of the imagined future trajectory, keeping only the next time point $x^\textsc{c}_t$, and returns the partial trajectory $x^\textsc{c}_{1:t}$, together with a weight $w^\textsc{c} \cdot w^\textsc{r}$ that reflects the utility of the chaser and the runner.
 
 \begin{algorithm}[!t]
 \begin{algorithmic}
@@ -386,12 +394,6 @@ Probabilistic program implementation of the Chaser-Runner model. The \textsc{epi
 % \label{alg:genproc}
 \end{algorithm}
 
-Algorithm~\ref{alg:chaser-runner-programs} shows pseudo-code for the Chaser-Runner model, formulated as nested probabilistic programs that we refer to as queries. Together, these programs define a planning-as-inference problem \cite{toussaint06} in which queries generate weighted samples, resulting in a nested importance sampling  \cite{naesseth2015nested} scheme that we describe in more detail below.
-
-\textbf{The episode model} initializes the location of the chaser to a specified start location $x^\textsc{c}_1 = x^\textsc{c}_\textsc{start}$. For subsequent time points $t=2 \ldots T$, the model samples a weighted partial trajectory $(x^\textsc{c}_{1:t}, w_t)$ from the outermost \textsc{chaser} model. After the final iteration, the model returns the completed trajectory $x^\textsc{c}_{1:T}$ and the product over incremental weights $w_{1:T}$.
-
-\textbf{The outermost model} describes the chaser's plan for trajectories, given the chaser's belief about possible runner trajectories. The chaser selects a goal location $x^\textsc{c}_\textsc{goal}$ at random and uses the RRT planner to sample a possible future trajectory $x^\textsc{c}_{t:T}$. Note that this trajectory is random, owing to the stochastic nature of the RRT algorithm. In order to evaluate the utility of this trajectory, the chaser imagines a possible runner trajectory by sampling from the middlemost \textsc{runner} model. The chaser then evaluates the utility of the trajectory by using an isovist representation to determine the number of time points $T^\textsc{c}_\textsc{visible}$ during which the runner is visible to the chaser. The chaser then conditions the sampled trajectories by defining a weight $w^\textsc{c} = \exp( \alpha \, T^\textsc{c}_\textsc{visible})$. As we will discuss below, this corresponds to assigning a utility proportional to $T^\textsc{c}_\textsc{visible}$ in a planning-as-inference formulation. The model discards most of the imagined future trajectory, keeping only the next time point $x^\textsc{c}_t$, and returns the partial trajectory $x^\textsc{c}_{1:t}$, together with a weight $w^\textsc{c} \cdot w^\textsc{r}$ that reflects the utility of the chaser and the runner.
-
 \textbf{The middlemost model} describes the chaser's reasoning about possible runner trajectories. %We assume that the runner is aware of the chaser's location, for example because %the chaser is a UAV, which can be heard by the runner.
 We assume that the chaser models a worst-case scenario where the runner is aware of the chaser's location. This could be, for example, because the runner uses a police scanner to listen in on the chaser's reported location.
 Moreover, we assume that at any point in time, the episode only continues when the chaser has not yet detected the runner. Finally, we assume that the runner will seek to avoid detection by imagining a chaser trajectory, and then selecting a trajectory that will not intersect the that of the chaser. We implement these assumptions in the probabilistic program as follows. The runner model first selects a start location $x^\textsc{r}_\textsc{start}$ and goal location $x^\textsc{r}_\textsc{goal}$ at random, and then samples a random trajectory $x^\textsc{r}_{1:T}$ using the RRT planner. The runner then imagines a future chaser trajectory by selecting a goal location $\tilde{x}^\textsc{c}_\textsc{goal}$ at random and sampling $\tilde{x}^\textsc{c}_{t:T}$ from the innermost model. We then condition this sample by computing the total time of visibility $T^\textsc{r}_\textsc{visible}$, based on both the known past trajectory $x^\textsc{c}_{1:t-1}$ and the imagined future trajectory $\tilde{x}^\textsc{c}_{t:T}$ of the chaser. Finally, we assign a weight $w^\textsc{r} = \exp(-\alpha T^\textsc{r}_\textsc{visible})$, which corresponds to a negative utility (i.e.~a cost) proportional to $T^\textsc{r}_\textsc{visible}$ in the planning-as-inference formulation.
@@ -403,13 +405,15 @@ Moreover, we assume that at any point in time, the episode only continues when t
 % ------------------------------------------------------------
 \section{Planning as Inference Formulation}
 
-The Chaser-Runner model performs two levels of nested inference. At the episode level, we infer the next time point $x^\textsc{c}_t$, conditioning on expected future detections. In order to evaluate this likelihood, we simulate runner trajectories that are conditioned to avoid future detections. We implement conditioning using a planning-as-inference formulation for probabilistic programs \cite{toussaint06,vandemeent2016black-box}. 
+The Chaser-Runner model performs two levels of nested inference. At the episode level, we infer the next time point $x^\textsc{c}_t$, conditioning on expected future detections. In order to evaluate this likelihood, we simulate runner trajectories that are conditioned to avoid future detections. We will perform inference using a nested importance sampling scheme \cite{naesseth2015nested}, which is a generalization of importance sampling in which weighted samples at one level in the model are used as proposals at other levels in the model. Note that nested importance samplign is \emph{not} a form of nested Monte Carlo estimation as discussed in \textcite{rainforth2018nesting} and \textcite{rainforth2018nestingb}. We discuss the distinctions between the two methods below.
 
-In a planning-as-inference problem, we consider a target density $\pi(x) = \gamma(x) / Z$ that is defined in terms of an unnormalized density $\gamma(x)$, which in turn is defined in terms of prior $p(x)$ and a utility or reward $R(x)$,
+
+We implement conditioning using a planning-as-inference formulation \cite{toussaint06,vandemeent2016black-box}. 
+In planning-as-inference problems, the target density $\pi(x) = \gamma(x) / Z$ is defined in terms of an unnormalized density
 \begin{equation}
-    \gamma(x) = \exp(R(x)) p(x).
+    \gamma(x) = \exp(R(x)) p(x),
 \end{equation}
-% Here, the normalizing constant $Z = \mathbb{E}[\exp(R(x))]$ is sometimes referred to as the desirability \cite{todorov2009efficient}. 
+which in turn is defined in terms of prior $p(x)$ and a utility or reward $R(x)$. The normalizing constant $Z = \mathbb{E}[\exp(R(x))]$ is sometimes referred to as the desirability \cite{todorov2009efficient}. 
 
 The Chaser-Runner model in Algorithm~\ref{alg:chaser-runner-programs} defines a sequence of unnormalized densities 
 \begin{align*}
@@ -422,17 +426,71 @@ The Chaser-Runner model in Algorithm~\ref{alg:chaser-runner-programs} defines a 
     p(\tilde{x}^\textsc{c}_{t:T} | x^\textsc{c}_{t-1})
     p(x^\textsc{r}_{1:T}).
 \end{align*}
-In this density, the reward $\alpha (T^\textsc{c}_\textsc{visible} - T^\textsc{r}_\textsc{visible})$ depends on the \emph{difference} between the number of time points during which the chaser expects that the runner will be visible, and the number of time points during which the runner expects to be visible based the imagined chaser trajectory (which reflects its more naive model of the chaser). In other words, the the chaser aims to identify trajectories that will result in likely detections of the runner, under the assumption that the runner will avoid trajectories where detection is likely given a naive chaser model. 
+In this density, the reward $\alpha (T^\textsc{c}_\textsc{visible} - T^\textsc{r}_\textsc{visible})$ depends on the \emph{difference} between the number of time points during which the chaser expects that the runner will be visible, and the number of time points during which the runner expects to be visible based the imagined chaser trajectory (which reflects a more naive model of the chaser). In other words, the the chaser aims to identify trajectories that will result in likely detections of the runner, under the assumption that the runner will avoid trajectories where detection is likely given a naive chaser model. 
 
-At each time we sample $x^\textsc{c}_t \sim \pi_t(x^\textsc{c}_t)$ from the marginal of this probabilistic model. To do so, we employ a nested importance sampling scheme, in which we sample $K$ particles from the \textsc{chaser} model at each $t$. For each of the $K$ samples, we draw $L$ samples from the \textsc{runner} model. We then perform resampling to select $K$ of the resulting $K \cdot L$ particles, which corresponds to performing SMC sampling within the \textsc{episode} model. Note that in the resulting nested sampling scheme, each of the $L$ samples corresponds a \emph{different} runner trajectory $x^\textsc{r}_{1:T}$, but that the reward for this trajectory is evaluated relative to the \emph{same} past $x^\textsc{c}_{1:t-1}$ and future $x^\textsc{c}_{t:T}$ trajectories for the chaser. 
+\vspace{-0.25em}
+\section{Nested Importance Sampling}
+\vspace{-0.25em}
+
+We can perform inference in the chaser-runner model using Monte Carlo method for probabilistic programs. Algorithm~\ref{alg:chaser-runner-programs} defines an importance sampling scheme. At each time $t$, we sample $x^\textsc{c}_t \sim \pi_t(x^\textsc{c}_t)$ from the marginal of the target density above. To do so, we sample $K$ particles from the \textsc{chaser} model. For each sample, we draw $L$ samples from the \textsc{runner} model. We then perform resampling to select $K$ of the resulting $K \cdot L$ particles with, which corresponds to performing SMC sampling within the \textsc{episode} model. 
 
 To denote this sampling scheme, we define query distributions in lines 1-3 of Algorithm~\ref{alg:chaser-runner-programs}. We assume an operator \textbf{importance} that accepts a query and a number of samples $L$ and returns a transformed query $Q$ that accepts $K$ samples, and returns $K \times L$ weighted samples. We additionally assume a \textbf{resample} operation that accepts a query and a sample count $K$ and returns a new query that resamples $K$ samples from a query, down-sampling or up-sampling if necessary. 
 
-% \vspace{-0.2in}
-\section{Experimental Setup and Results}
+When $L=1$, this sampling scheme reduces to standard SMC inference for probabilistic programs \cite{wood-aistats-2014}. When $L>1$ it can be understood as a a form of nested importance sampling \cite{naesseth2015nested}. Note that in this sampling scheme, each of the $L$ samples corresponds a \emph{different} runner trajectory $x^{\textsc{r},k,l}_{1:T}$, but that the reward for this trajectory is evaluated relative to the \emph{same} past $x^{\textsc{c},k}_{1:t-1}$ and imagined future $x^{\textsc{c},k}_{t:T}$ trajectory for the chaser. 
 
-Relative to previous approaches, this case study advances applying theory of mind models in a more realistic and complex setting for decision making. %We introduce nested theory of mind models that each use complex deterministic components such as RRT planners and field of view calculations as part of their model to plan and craft counter-plans against other agents. 
-We carry out three categories of empirical experiments: 1) \textit{model flexibility}, where we demonstrate that rational behavior can be manifested by the models depending on conditioning, 2) \textit{detection rates}, which test to what extent a more accurate model of a runner enables the chaser to detect the runner most often, and 3) \textit{computational}, where we quantify the trade-offs in allocating our sample budget at different levels of the model. 
+As noted above, nested importance sampling is not the same as nested Monte Carlo estimation. In nested Monte Carlo problems, we compute an expectation of the form $\mathbb{E}[f(y, \mathbb{E}[g(y, z)])]$, which is to say that we compute an expectation in which, for each sample $y$, we need to compute an expected value by marginalizing over samples $z$. In the chaser-runner problem, we would obtain a nested Monte Carlo probelm if we defined the weight
+\[
+    w^k_t 
+    = 
+    \exp
+    \left[
+        \hat{R}\big(
+            x^{\textsc{c}, k}_{1:T}
+            \big)
+    \right],
+\]
+by averaging the reward over chaser trajectories
+\[
+    \hat{R}\big(
+        x^{\textsc{c}, k}_{1:T}
+    \big)
+    =
+    \frac{1}{L}
+    \sum_{l=1}^L
+    R
+    \big(
+        x^{\textsc{c}, k}_{1:T},
+        x^{\textsc{r}, k, l}_{1:T}
+    \big)
+    .
+\]
+In nested importance sampling, we select a particle $x^{\textsc{c}, k}_{1:T}$ according to the average weight 
+\[
+    w^k_t 
+    = 
+    \frac{1}{L}    
+    \sum_{l=1}^L
+    \exp 
+    \left[
+    R
+    \big(
+        x^{\textsc{c}, k}_{1:T},
+        x^{\textsc{r}, k, l}_{1:T}
+    \big)
+    \right].
+\]
+This is sometimes referred to as nested conditioning, in the context of probabilistic programming systems \cite{rainforth2018nestingb}.
+For any choice of $L$, this is a valid importance sampling scheme in which the importance weight provides an unbiased estimate of the normalizing constant.
+
+
+% \vspace{-0.2in}
+\vspace{-0.25em}
+\section{Experiments}
+\vspace{-0.25em}
+
+%This work advances the state of the art in theory of mind modeling by considering a more realistic and complex setting for decision making. %We introduce nested theory of mind models that each use complex deterministic components such as RRT planners and field of view calculations as part of their model to plan and craft counter-plans against other agents. 
+We carry out three categories of experiments: 1) \textit{trajectory visualization experiments}, in which we qualitatively evaluate what forms of rational behavior arise in our model depending on conditioning, 2) \textit{detection rate experiments}, which test to what extent a more accurate model of a runner enables the chaser to detect the runner most often, and 3) \textit{sample budget experiments}, where we quantify the trade-offs in allocating our sample budget at different levels of the model. 
+
 
 % old
 % Our experiments test to what extent a more accurate model of a runner enables the chaser to detect the runner more often. We carry out 3 categories of experiments: 1) \textit{computational}, where we demonstrate that our inference algorithm empirically converges to the same distribution over trajectories as the one obtained using Metropolis Hastings,  2) \textit{model flexibility}, where we demonstrate that rational behavior is manifested by the models depending on conditioning, and 3) \textit{detection rates}, demonstrating that more complex models increase detection rates of the runner by implementing our full theory of mind chaser-runner model.
@@ -441,93 +499,139 @@ We carry out three categories of empirical experiments: 1) \textit{model flexibi
 \begin{figure*}
 \begin{center}
 \centerline{\includegraphics[width=2.0\columnwidth]{occupancy_diagram.eps}}
-\caption{ \textbf{The Chaser-Runner model} showing the innermost, middlemost, and outermost models. (a)-(c) show posterior distributions over paths after running importance sampling. See text for details. Figures (d)-(e) show posterior distributions of $L$ \textit{runner} and \textit{naive chaser} paths, when $(K,L) = 128, 16$ for a single resampled $K$ sample. See text for more details. 
+\caption{ \textbf{Chaser and runner trajectories} in the innermost, middlemost, and outermost models where locations circled in red are the starting locations for each agent. We show posterior distributions of $L$ \textit{runner} and \textit{naive chaser} paths, when $(K,L) = 128, 16$ for a single resampled sample $k$. (a)-(c) show posterior distributions over paths after running importance sampling where we condition the start and goal locations for each agent. Figures (d)-(e) show posterior paths after we only condition the start locations for the agents . %See text for details. 
 }
 \label{fig:progression}
 \end{center}
-% \vskip -0.3in
+\vspace{-1em}
 \end{figure*} 
-
-
-\subsection{Model Flexibility Experiments}
-
-In these experiments, we show how nested inference converges empirically to rational behavior at each layer of the model. We begin the experiments by setting up inference to work with a worst case scenario of the runner having full knowledge of the chaser's whereabouts. %Our first experiment is shown in a series of heat maps in Figure~\ref{fig:progression} (a)-(c). 
-Our first experiment begins in Figure~\ref{fig:progression} (a), with a heat map of imagined chaser paths in the innermost model where we conditioned the start and goal locations. Then we reveal how a runner, i.e. the middlemost model, uses the innermost model to plan and avoid detection while reaching the same goal as the chaser (which we in this experiment condition to be the identical), Figure~\ref{fig:progression} (b). Lastly, the outermost model converges to a plan that leads to higher detection probability of plans sampled from the middlemost model of the runner in Figure~\ref{fig:progression} (c). To this end, Figure~\ref{fig:progression} (a)-(c) demonstrates how our Chaser-Runner model can adjust planning based on simulated imagined scenarios. 
-
-The second experiment relaxes the conditioning to observe only the start locations for each agent. We use a sample budget of $(K,L) = (128, 16)$ and view the $L$ imagined chaser and runner paths from a single $k$ sample (sampled proportionally to importance weights) in Figure~\ref{fig:progression} (d)-(e). As the runner observes the naive chaser's plans,  Figure~\ref{fig:progression} (d), the runner plans paths to maximizes utility, which tend to avoid detection from the naive chaser,  shown in Figure~\ref{fig:progression} (e). Although the naive chaser travels directly toward goal locations, in this particular $k$ sample, the naive chaser begins on the lower end of the map, therefore covering more area toward locations \textbf{b}, \textbf{c}, and \textbf{d}. This results in the runner traveling through the center of city without (or hardly any) detection.  This is a case where the RRT planner provides the runner with  a shorter and direct plan to minimize detection from the chaser. We note that for visual purposes, we display paths from time step 3 and on in Figure~\ref{fig:progression} (d)-(e). 
-
-
 
 \begin{figure}[!t]
 \begin{center}
+\begin{minipage}[t]{0.4\linewidth}
+\centerline{\textsf{\footnotesize Naive Runner}}
+\end{minipage}
+\begin{minipage}[t]{0.4\linewidth}
+\centerline{\textsf{\footnotesize Smarter Runner}}
+\end{minipage}
+
 \centerline{\includegraphics[width=0.9\columnwidth]{detection_examples.eps}}
-\caption{(a) Smart chaser playing against a naive runner, where the chaser anticipates the the intersection point and heads in the correct direction to detect the runner. (b) Smart chaser playing against a smarter runner. (c) Smartest chaser against the naive runner. (d) Smartest Chaser infers the runner locations to be more hidden, avoiding the center of the map. The chaser successfully detects the smarter runner. See text for details. }
+\caption{(a) Smart chaser playing against a naive runner, where the chaser anticipates the the intersection point and heads in the correct direction to detect the runner. (b) Smart chaser playing against a smarter runner. (c) Smartest chaser against the naive runner. (d) Smartest Chaser infers the runner locations to be more hidden, avoiding the center of the map. The chaser successfully detects the smarter runner.} %See text for details. }
 \label{fig:exps}
 \end{center}
-\vskip -0.4in
+\vspace{-1em}
+%\vskip -0.4in
 \end{figure} 
+
+\vspace{-0.25em}
+\subsection{Visualization of Trajectories}
+\vspace{-0.25em}
+
+Before carrying out a more quantitative evaluation of the chaser-runner model, we visualize sampled trajectories to show how nested inference converges empirically to rational behavior at each level of the model. 
+We begin by considering a simplified scenario in which we assume fixed start and goal locations. These locations are known to both the chaser and the runner, which means that the chaser and runner do not have to perform inference over possible goal locations.
+Figure~\ref{fig:progression} (a) shows a heat map of naive chaser paths in the innermost model, which are conditioned on the start and goal locations. In Figure~\ref{fig:progression} (b), we show a heat map of runner paths, in which the runner travels in the opposite direction along the same two locations. We observe that the runner avoids direct routes so as to minimize chance of detection. In Figure~\ref{fig:progression} (c) we show a heat map of chaser trajectories in the outermost model, which shows that the chaser selects paths that are likely to lead to interception of the runner. Together, Figures~\ref{fig:progression} (a)-(c) demonstrate how our Chaser-Runner model can perform planning conditioned on start and end locations.
+
+% When now consider a setting in which only the start locations are known to each agent. We use a sample budget of $(K,L) = (128, 16)$.
+In Figure~\ref{fig:progression} (d)-(e), we visualize $L$ \textit{naive} chaser and runner paths from a single $k$ sample (sampled proportionally to importance weights) at times step $t\ge3$. 
+%We note that for visual purposes, we display paths from time step 3 and on in Figure~\ref{fig:progression} (d)-(e). 
+The runner paths in Figure~\ref{fig:progression} (e) once again avoid detection relative to the naive chaser paths in Figure~\ref{fig:progression} (d). Although the naive chaser travels directly toward goal locations from the upper end of the map, in this particular $k$ sample, the naive chaser most often remains on the left side of the map. This results in the runner traveling through the center of city to minimize probability of detection, but more often planning toward location \textbf{h}.  This is a case where the RRT planner provides the runner with  a shorter and direct plan to minimize detection from the chaser. 
+
+
+
 
 
 %-------------------------
 
 
-\begin{table}[!b]
-\caption{Detection Rates for Types of Agents}
-\centering
-\begin{tabular}{c"c|c}
-    \hline\hline 
-    $\ $ & naive runner & smarter runner \\\thickhline
-    smart chaser & $(49/50)=0.98$ & $(18/50)=0.36$ \\\hline
-    smartest chaser & $(49/50)=0.98$ & $(28/50)=0.56$ \\\hline
-\end{tabular}
-\label{table:detect_rates}
-% \vskip -0.2in
-\end{table}
-
-
+\vspace{-0.25em}
 \subsection{Detection Experiments}
-\vspace{-0.5em}
-For our second set of experiments, we apply our Chaser-Runner model in a couple of scenarios where we compare detection rates against a basic (i.e non-theory-of-mind) chaser model, which we describe later in the section. We run simulations using two types of runners, a \textit{naive runner} which plans from start to goal locations directly with RRT plans, and a \textit{smarter runner} which plans from start to goal locations using a basic runner model to avoid naive path-planning chasers. We show that when the chaser has an accurate model of the runner, the detection rates over episode restarts are relatively high compared to when it has an inaccurate model of the runner. Additionally we show that a more complex chaser model can perform just as well as a basic chaser model when in search of a naive runner and performs better against a smarter runner. 
+\vspace{-0.25em}
+
+To evaluate the influence of nested modeling on resulting plans, we compare detection rates in the full chaser-runner model to detection rates in three simplified models. %In the first model, we assume a naive runner. In the second model, the chaser assumes a naive runner, whereas the actual runner is not naive, resulting in a form of model mismatch. 
+%We compare detection rates against a basic (i.e non-theory-of-mind) chaser model, which we describe later in the section. 
+We run simulations using two types of runners. We refer to the runner from the full model as the \emph{smarter runner}, and also consider a \textit{naive runner} which samples from the RRT planner in the same manner as the naive chaser. We similarly consider two chaser models. We refer to the chaser from the full model as the \emph{smartest chaser}. We additionally consider a simplified model in which the chaser assumes a naive runner, which we refer to as a \emph{smart chaser}. 
+
+These two runner and chaser models together yield 4 modeling scenarios. Table~\ref{table:detect_rates} shows the average detection rate over 50 restarts for each scenario. Figure~\ref{fig:exps} shows illustrative trajectories. In this figure, `C' stands for Chaser; `R' stands for runner.  The blue triangle represents the chaser's true, current location. 
+Blue dashed lines represent the past chaser trajectory whereas crosses mark future locations imagined by the runner. 
+Magenta diamonds represent samples of inferred runner locations;
+magenta crosses represent inferred future runner trajectories.  
+
+% When the chaser has an accurate model of the runner, the detection rates over episode restarts are relatively high compared to when it has an inaccurate model of the runner. Additionally we show that a more complex chaser model can perform just as well as a basic chaser model when in search of a naive runner and performs better against a smarter runner. 
 
 %  We define a smart chaser that has an accurate mental model of the naive runner by adjusting our Chaser-Runner model (set to $(K,L)=(128, 1)$), to condition only the outer model to maximize its utility. Since we do not condition the middlemost model, the runner is not rewarded for any planning, therefore simulating naive plans.
+
+% We define the naive runner to be a runner that simply plans a path from its start to goal location, without any particular reasoning about the chaser.  %-- in other words, the smart chaser expects the naive runner to plan a path directly from start to goal. 
+% This setup of our chaser implies that our \textit{smart chaser} will sample plans that tend to head off the naive runner.  
+% Figure~\ref{fig:exps} (a) illustrates a prototypical result.  
+% The chaser's plans tend to keep crossing the center of the map where it reliably detects the runner. This experiment is composed of 50 restarts (of the episode), uses the same naive runner in each restart, and results in a detection rate of 0.98, Table~\ref{table:detect_rates}. 
  
  
-\textbf{Experiment #1: Naive Runner, Smart Chaser.} The first experiment illustrates how a relatively \emph{smart chaser} can reliably head off and detect a \emph{naive runner}. We define the naive runner to be a runner that simply plans a path from its start to goal location, without any particular reasoning about the chaser.  %-- in other words, the smart chaser expects the naive runner to plan a path directly from start to goal. 
-This setup of our chaser implies that our \textit{smart chaser} will sample plans that tend to head off the naive runner.  
-Figure~\ref{fig:exps} (a) illustrates a prototypical result.  
-The chaser's plans tend to keep crossing the center of the map where it reliably detects the runner. This experiment is composed of 50 restarts (of the episode), uses the same naive runner in each restart, and results in a detection rate of 0.98, Table~\ref{table:detect_rates}. 
+% \textbf{Experiment #1: Naive Runner, Smart Chaser.} A \emph{smart chaser} can reliably head off and detect a \emph{naive runner}. We define the naive runner to be a runner that simply plans a path from its start to goal location, without any particular reasoning about the chaser.  %-- in other words, the smart chaser expects the naive runner to plan a path directly from start to goal. 
+% This setup of our chaser implies that our \textit{smart chaser} will sample plans that tend to head off the naive runner.  
+% Figure~\ref{fig:exps} (a) illustrates a prototypical result.  
+% The chaser's plans tend to keep crossing the center of the map where it reliably detects the runner. This experiment is composed of 50 restarts (of the episode), uses the same naive runner in each restart, and results in a detection rate of 0.98, Table~\ref{table:detect_rates}. 
 
 % This experiment had a relatively high detection rate of $\approx 0.80$, shown in Table~\ref{table:detect_rates}.
 
+% \textbf{Experiment #2: Smarter Runner, Smart Chaser.} For our second experiment, we increase the model complexity of the runner.  The \emph{smarter runner} is a runner with a mental model of a chaser that has a mental model of a simple runner. The smarter runner expects the chaser to remain in the center of the map, as it is trying to head off a naive agent.
 
-\textbf{Experiment #2: Smarter Runner, Smart Chaser.} For our second experiment, we increase the model complexity of the runner.  The \emph{smarter runner} is a runner with a mental model of a chaser that has a mental model of a simple runner. The smarter runner expects the chaser to remain in the center of the map, as it is trying to head off a naive agent.
+% The smart chaser is the same as in Experiment #1.  
+% Figure~\ref{fig:exps} (b) illustrates a prototypical result.  Because the smarter runner knows how to avoid the chaser, and because the chaser still has a mental model of a runner that goes straight for the goal, the runner avoids detection. In Figure~\ref{fig:exps} (b), the runner is seen swerving sharply left taking a longer path around the perimeter of the city to reach its goal. As a result, the chaser is unable to find the runner for the rest of the simulation. Our experiments, composed of 50 restarts with identical smarter runner trajectories, revealed a lower detection rate of 0.36, shown in Table~\ref{table:detect_rates}.
+% \vspace{1em}
 
-The smart chaser is the same as in Experiment #1.  
-Figure~\ref{fig:exps} (b) illustrates a prototypical result.  Because the smarter runner knows how to avoid the chaser, and because the chaser still has a mental model of a runner that goes straight for the goal, the runner avoids detection. In Figure~\ref{fig:exps} (b), the runner is seen swerving sharply left taking a longer path around the perimeter of the city to reach its goal. As a result, the chaser is unable to find the runner for the rest of the simulation. Our experiments, composed of 50 restarts with identical smarter runner trajectories, revealed a lower detection rate of 0.36, shown in Table~\ref{table:detect_rates}.
-\vspace{1em}
+% \textbf{Experiment #3: Naive Runner, Smartest Chaser.} In this next experiment, we use the identical naive runner from Experiment #1, but the chaser is the Chaser-Runner model, described in Section~\ref{sec:tcrm}, using $(K,L)=(128, 16)$ with \textbf{both} outer and middlemost models conditioned to maximize utility. In other words, the chaser assumes a non-naive runner, even though the runner's behavior is in fact naive. 
+
+% Figure~\ref{fig:exps} (c) illustrates a prototypical result.
+% This figure is an example of a successful detection.
+% `C' stands for Chaser; `R' stands for runner.  The
+% blue triangle represents the chaser's true, current location; blue
+% dashed lines and Xs represent the chaser's inferences about the
+% runner's inferences about where the chaser will move next (this is the result of inference in the middlemost model). Magenta diamonds represent samples of where the chaser thinks the runner is;
+% magenta Xs represent samples of where the chaser thinks the runner
+% will move next. The chaser correctly predicts the runner's expected
+% next location (blue circle) and plans a path to intercept it (black
+% dashed line); the chaser's isovist is shown as a light green
+% polygon.
+
+% Here, the multimodality of the model's inferences is apparent: the chaser predicts two possible modes where the runner could be (clusters of magenta triangles), but assigns more probability mass to the upper (correct) cluster; the result is that the chaser plans a path to that location, which results in a detection. After running 50 restarts, this experiment resulted in a detected rate of 0.98 (shown in Table~\ref{table:detect_rates}), where we us the same previous naive runner as Experiment 1 in each restart.
+
+% \textbf{Experiment #4: Smarter Runner, Smartest Chaser.} This experiment tests our fully implemented theory of mind model, the Chaser-Runner model using $(K,L)=(128,16)$ against the smarter runner (used in Experiment 2).  Figure~\ref{fig:exps} (c) illustrates a prototypical result and an example of a successful detection. As seen, the chaser now predicts the runner will avoid highly visible areas of the map and travel through alley ways and around the city. In this scenario, we see that the model's inference become unimodel and the chaser is able to detect the chaser. This experiment yielded a detection rate of 0.56 after running 50 restarts, shown in Table~\ref{table:detect_rates}. Although these detection rates may seem low at first, recall that Experiment 2 yielded a low 0.36 detection rate. By implementing the full theory of mind model, we see that the chaser improves detection rates and is able to successfully model and infer the behavior of the smarter agent. 
+
+\paragraph{1. Naive Runner, Smart Chaser.} A smart chaser can reliably intercept a naive runner. 
+Figure~\ref{fig:exps} (a) illustrates a successful detection. We observe that the chaser typically navigates to the center of the map. Since the shortest path between most points crosses the center of the map, this allows the chaser to intercept the runner with high probability.
+
+\paragraph{2. Smarter Runner, Smart Chaser.} When we increase the model complexity of the runner, the detection probability decreases. 
+Figure~\ref{fig:exps} (b) illustrates a prototypical result.  The \emph{smarter runner} expects the chaser to remain in the center of the map, as it is trying to head off a naive agent, and successfully avoids the center of the map. In Figure~\ref{fig:exps} (b), the runner is seen swerving sharply left taking a longer path around the perimeter of the city to reach its goal. As a result, the chaser is unable to find the runner for the rest of the simulation. The average detection rate is 0.36, which means that a smarter runner is able to avoid a misinformed chaser in most episodes.
+
+\paragraph{3. Naive Runner, Smartest Chaser.} In this experiment, the chaser assumes a smarter runner, even though the runner's behavior is in fact naive.  Figure~\ref{fig:exps} (c) illustrates a prototypical result. Here, the multimodality of the model's inferences is apparent: the chaser predicts two possible modes where the runner could be (clusters of magenta triangles), but assigns more probability mass to the upper (correct) cluster; the result is that the chaser plans a path to that location, which results in a detection. As it turns out, this model variant results yields a detection rate of 0.98, which is the same as that of in scenario 1, where the chaser has an accurate model of the naive runner.
+
+\textbf{4. Smarter Runner, Smartest Chaser.} Figure~\ref{fig:exps} (d) shows a prototypical result from the full chaser-runner model, which results in a successful detection. The chaser anticipates that the runner will avoid highly visible areas of the map and travel through alley ways and around the city. 
+
+This experiment yielded a detection rate of 0.56, which is significantly higher than the detection rate of 0.36 in experiment 2. %By implementing the full theory of mind model, we see that the chaser improves detection rates and is able to successfully model and infer the behavior of the smarter agent. 
+
+\begin{table}[!t]
+\centering
+\begin{tabular}{r|cc}
+    \toprule
+    & Naive Runner & Smarter Runner \\
+    \midrule
+    Smart Chaser & $(49/50)=0.98$ & $(18/50)=0.36$ \\
+    Smartest Chaser & $(49/50)=0.98$ & $(28/50)=0.56$ \\
+    \bottomrule
+\end{tabular}
+\caption{Detection Rates for Agent Model Variants}
+\label{table:detect_rates}
+\end{table}
+
 % % --------------------------------------------------------------------------------
 
-\textbf{Experiment #3: Naive Runner, Smartest Chaser.} In this next experiment, we use the identical naive runner from Experiment #1, but the chaser is the Chaser-Runner model, described in Section~\ref{sec:tcrm}, using $(K,L)=(128, 16)$ with \textbf{both} outer and middlemost models conditioned to maximize utility. In other words, the chaser assumes a non-naive runner, even though the runner's behavior is in fact naive. 
 
-Figure~\ref{fig:exps} (c) illustrates a prototypical result.
-This figure is an example of a successful detection.
-`C' stands for Chaser; `R' stands for runner.  The
-blue triangle represents the chaser's true, current location; blue
-dashed lines and Xs represent the chaser's inferences about the
-runner's inferences about where the chaser will move next (this is the result of inference in the middlemost model). Magenta diamonds represent samples of where the chaser thinks the runner is;
-magenta Xs represent samples of where the chaser thinks the runner
-will move next. The chaser correctly predicts the runner's expected
-next location (blue circle) and plans a path to intercept it (black
-dashed line); the chaser's isovist is shown as a light green
-polygon.
-
-Here, the multimodality of the model's inferences is apparent: the chaser predicts two possible modes where the runner could be (clusters of magenta triangles), but assigns more probability mass to the upper (correct) cluster; the result is that the chaser plans a path to that location, which results in a detection. After running 50 restarts, this experiment resulted in a detected rate of 0.98 (shown in Table~\ref{table:detect_rates}), where we us the same previous naive runner as Experiment 1 in each restart.
 
 
 \begin{figure}[!t]
 \begin{center}
-\centerline{\hspace{-0.2em}\includegraphics[width=1.05\columnwidth]{EXP-particle_exp_updated_legend.eps}}
-\caption{ Log mean log weights, $\tilde{z}$, and Fractional ESS (normalized by $K$) as a Function of Time for each sample budget. \textbf{Top Row:}  $\tilde{z}^\textsc{R}$ for the middlemost model (left), and $\tilde{z}^\textsc{C}$ the outermost model, (right). \textbf{Bottom Row:} The fractional ESS for each varying $K$ and $L$.  }
+\centerline{\hspace{-0.2em}\includegraphics[width=1.05\columnwidth]{PLOT_A_4Part.eps}}
+\caption{ Log mean log weights, $\bar{Z}$, and Fractional ESS (normalized by $K$) as a Function of Time for each sample budget. \textbf{Top Row:}  $\bar{Z}^\textsc{R}$ for the middlemost model (left), and $\bar{Z}^\textsc{C}$ the outermost model, (right). \textbf{Bottom Row:} The fractional ESS for each varying $K$ and $L$.  }
 %Varying sampling sizes for the respective outermost and middlemost model: 2048x1 (dark blue), 512x4 (blue), 128x16 (violet), 64x32 (green), 32x64 (red-brown), 16x128 (orange), 4x512 (light grey).    }
 \label{fig:log_means}
 % \label{fig:exps}
@@ -535,19 +639,18 @@ Here, the multimodality of the model's inferences is apparent: the chaser predic
 \vskip -0.4in
 \end{figure} 
 
-\textbf{Experiment #4: Smarter Runner, Smartest Chaser.} This experiment tests our fully implemented theory of mind model, the Chaser-Runner model using $(K,L)=(128,16)$ against the smarter runner (used in Experiment 2).  Figure~\ref{fig:exps} (c) illustrates a prototypical result and an example of a successful detection. As seen, the chaser now predicts the runner will avoid highly visible areas of the map and travel through alley ways and around the city. In this scenario, we see that the model's inference become unimodel and the chaser is able to detect the chaser. This experiment yielded a detection rate of 0.56 after running 50 restarts, shown in Table~\ref{table:detect_rates}. Although these detection rates may seem low at first, recall that Experiment 2 yielded a low 0.36 detection rate. By implementing the full theory of mind model, we see that the chaser improves detection rates and is able to successfully model and infer the behavior of the smarter agent.
+% \textbf{Discussion} Table~\ref{table:detect_rates} collects the detection rates for each of the four experiments. In Experiment 1, the smart chaser has a correct model of the runner, and therefore has a relatively high detection rate of 0.98. When the naive runner competes against the smartest chaser (Experiment 3), the detection performance is maintained. When the smarter runner is introduced (Experiment 2), detection rates for the smart chaser decrease to 0.36.  Lastly, when we simulate the our nested models, the rates increase to 0.56. 
 
-\textbf{Discussion} Table~\ref{table:detect_rates} collects the detection rates for each of the four experiments.  In Experiment 1, the smart chaser has a correct model of the runner, and therefore has a relatively high detection rate of 0.98. When the naive runner competes against the smartest chaser (Experiment 3), the detection performance is maintained. When the smarter runner is introduced (Experiment 2), detection rates for the smart chaser decrease to 0.36.  Lastly, when we simulate the our nested models, the rates increase to 0.56. 
+\textbf{Discussion.} These 4 scenarios illustrate that 
+when the runner reasons more deeply, he evades more effectively; Conversely when the chaser reasons more deeply, he intercepts more effectively. Furthermore, we show that a single, unified inference algorithm can uncover a wide variety of intuitive, rational behaviors for both the runner and the chaser. %, perhaps suggesting that good models are more important than complex inference algorithms, at least for simple problems.
 
-This strengthens the generally accepted idea that better models matter. When the runner reasons more deeply, he evades more effectively; when the chaser reasons more deeply, he intercepts more effectively. Furthermore, a single, unified inference algorithm results in a wide variety of intuitive, rational behavior for both the runner and the chaser, perhaps suggesting that good models are more important than complex inference algorithms, at least for simple problems.
 
-
-\subsection{Sample Particle Budget Experiment}
+\subsection{Sample Budget Experiments}
 \vskip -0.05in
 
 \begin{figure}[!t]
 \begin{center}
-\centerline{\hspace{-0.2em}\includegraphics[width=1.05\columnwidth]{EXP-A2-particle_var.eps}}
+\centerline{\hspace{-0.2em}\includegraphics[width=1.05\columnwidth]{PLOT_B_barplots.eps}}
 \caption{Box plots showing quantiles of log weights for the runner (left) and chaser (right) at each time step in the simulation for varying $K$ and $L$.}
 \label{fig:box_plots}
 %Log weight variance with K=512 L=4, K=128, L=16, and K=16, L=128.}
@@ -558,28 +661,77 @@ This strengthens the generally accepted idea that better models matter. When the
 
 %After running our detection experiments, we asked ourselves, does the number of particles sampled at each level of the model matter? In hind sight, should we have taken into account the difficulty level of sampling effective samples from each model? For example, we could consider a case where we would require a high number of samples from the chaser's runner model due to its difficulty in producing samples with low detection probabilities. On the other hand, we could consider the case where sampling from the chaser's runner model would need only a small sample size due to its ability to produce effective samples easily. We, of course, considered the same cases with the chaser model. 
 
-As a final set of experiments, we quantify how the allocation of our computational budget affects the reliability of our importance sampling estimator. To do so, we vary $K$ and $L$ while keeping the total number of samples fixed at $K \cdot L = 2048$. Given this budget, we vary $K$ and $L$ over the range
-\vskip -0.3in
+To evaluate how the allocation of computational resources to different levels of the model affects the variance of our importance sampling estimator, we carry out experiments in which we set $K$ and $L$ to
 \[
     (K,L) = (2048,1), (512, 4), (128, 16), \ldots (4,512)
 \]
-\vskip -0.1in
-In the model that we defined in Section~\ref{sec:tcrm}, the chaser weights $w^\textsc{c}$ and runner weights $w^\textsc{r}$ reflect the probability of detection from the perspective of the chaser and runner respectively.
+This fixes the total computation budget to $K L = 2048$ samples, which allows us to assess how many samples from the runner are needed to effectively evaluate utilities in the chaser model.
+
+% In the chaser-runner model that we defined in Section~\ref{sec:tcrm}, the chaser weights $w^\textsc{c}$ and runner weights $w^\textsc{r}$ reflect the probability of detection from the perspective of the chaser and runner respectively.
 %
 % Figure 4 TOP ROW
-For this experiment, we run $R=10$ independent restarts for each sample budget, $S=7$, resulting in a total of $(S \cdot R \cdot T \cdot K  \cdot L)$ weights, where $T$ denotes the number of time steps for each episode. Since our RRT planner returns a total of 30 steps, $T= 28$ when we exclude corresponding time steps for the start and goal locations. In Figure~\ref{fig:log_means} (top row), for each sample budget, we compute
-$\tilde{z}$, the log mean log weights, across ($R \cdot K \cdot L$) for each time step. We show that for each sample budget, $\tilde{z}^\textsc{c}$ decreases (left) as a function of time while $\tilde{z}^\textsc{r}$ remain relatively stable independent of time (right).  It is to be expected that $\tilde{z}^\textsc{c}$ decrease as a function of time given the lower probability of encountering the runner before the episode ends.
+In this experiment, we perform $R=10$ independent episode restarts for $7$ combinations of $(K,L)$ values. For each episode we compute $K$ chaser trajectories and $K \cdot L$ runner trajectories for  $T= 28$ time steps. In other words, we compute $7 \cdot R \cdot T \cdot K \cdot L$ runner trajectories $w^{\textsc{r}}$, just over 4 million in total.
+% In the chaser-runner model that we defined in Section~\ref{sec:tcrm}, the chaser weights $w^\textsc{c}$ and runner weights $w^\textsc{r}$ reflect the probability of detection from the perspective of the chaser and runner respectively.
+%For this experiment, we run $R=10$ independent restarts for each sample budget, resulting in a total of $(7 \cdot R \cdot T \cdot K  \cdot L)$ sampled runner trajectories, where $T$ denotes the number of time steps for each episode. 
+
+In Figure~\ref{fig:log_means} (top row), we show the log mean log weights for the chaser (left) and runner (right) at each time point $t$. These  are computed as follows 
+\begin{align*}
+    \bar{Z}^\textsc{c}_t 
+    &=\frac{1}{R}
+    \sum_{r=1}^R 
+    \log 
+    \left(
+    \frac{1}{K}
+    \sum_{k=1}^K
+    \sum_{l=1}^L
+    w^{\textsc{c},k,l}_t
+    w^{\textsc{r},k,l}_t
+    % \exp
+    % \left[
+    %     \alpha 
+    %     (T^{\textsc{c},k,l}_{\textsc{v},t}
+    %     - T^{\textsc{r},k,l}_{\textsc{v},t})
+    % \right]
+    \right)
+    \\
+    \bar{Z}^\textsc{r}_t 
+    &=\frac{1}{R}
+    \sum_{r=1}^R 
+    \log 
+    \left(
+    \frac{1}{KL}
+    \sum_{k=1}^K
+    \sum_{l=1}^L
+    w^{\textsc{r},k,l}_t
+    % \exp
+    % \left[
+    %     -\alpha 
+    %     - T^{\textsc{c},k,l}_{\textsc{v},t}
+    % \right]
+    \right)
+\end{align*}
+For each sample budget, $\bar{Z}^\textsc{c}_t$ decreases (left) as a function of time while $\bar{Z}^\textsc{r}_t$ remain relatively stable independent of time (right). The decrease in $\bar{Z}^\textsc{c}_t$ is to be expected, given that the probability of intercepting the runner decreases as we approach the end of the episode.
 
 % Figure 4 BOTTOM ROW
-To get a notion of the weight variance at each time step, we compute the Effective Sample Size, which for a set of $K$ weights $\{w_k\}$ is defined as 
+To get a evaluate the weight variance at each time step, we compute the effective sample size (ESS), which for a set of $K \cdot L$ weights $\{w^{k,l}\}$ is defined as 
 \vskip -0.1in
 \[
-    \textstyle \text{ESS} = \Big(\sum_k w_k \Big)^2 / \sum_k w_k^2.
+    \textstyle \text{ESS} 
+    = 
+    \Big(
+        \sum_{k=1}^K \sum_{l=1}^L w^{k,l} 
+    \Big)^2 
+    / 
+    \Big( 
+        \sum_{k=1}^K \sum_{l=1}^L (w^{k,l})^2
+    \Big).
 \]
 %\vskip -0.1in
-Figure~\ref{fig:log_means} (bottom row), shows the fractional ESS (normalized by $K$) as a function of time for each sample budget. As the the episode continues, the variance between weights decreases, reflecting that inference becomes relatively easier owing to the previously mentioned conclusion of progressively decreasing runner detection probabilities as we reach the end of the episode.
+Figure~\ref{fig:log_means} (bottom row), shows the fractional ESS %(normalized by $K \cdot L$) 
+(normalized by $K \cdot R$) % rewrote line above
+as a function of time for each sample budget. The effective sample size for the chaser weights increases over the course of the episode, reflecting that inference becomes easier owing to the previously mentioned conclusion of progressively decreasing runner detection probabilities as we reach the end of the episode.
 
-Figure~\ref{fig:box_plots} shows quantiles for log weights, which further confirms the trend in Figure~\ref{fig:log_means} (top left). We show higher median log weights and lower number of outliers as K decreases and L increases, whereas the $(K,L)=(512,4)$ results show that computed log weights are less robust when we draw a smaller number of samples from the middlemost model. To balance between lower variance estimates and maximizing utility for the chaser we used $(K,L)=(32,64)$ in our experiments. 
+Figure~\ref{fig:box_plots} shows quantiles with respect to restarts for log mean weights, which further confirms the trend in Figure~\ref{fig:log_means}. We show higher median log weights and lower number of outliers as K decreases and L increases,  $(K,L)=(16,128)$ results show that computed log weights are less robust when we draw a smaller number of samples from the outermost model. 
 
 
 
@@ -608,7 +760,9 @@ the runner, but not by the chaser.  Such integrated models may
 require inference metaprogramming; but how best to make
 such models computationally tractable is an open question.
 
+\section{Acknowledgements}
 
+We would like to acknowledge helpful feedback from a number of reviewers. IRS and DW  gratefully acknowledge the support of DARPA under grant FA8750-16-2-0209, and additional support from the NSF CUAS. IRS and JWM additionally acknowledge support from startup funds provided by Northeastern.
 
 %\bibliographystyle{abbrvnat}
 %\bibliography{main}
