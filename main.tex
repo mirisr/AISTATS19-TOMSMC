@@ -630,8 +630,10 @@ This experiment yielded a detection rate of 0.56, which is significantly higher 
 
 \begin{figure}[!t]
 \begin{center}
-\centerline{\hspace{-0.2em}\includegraphics[width=1.05\columnwidth]{PLOT_A_4Part.eps}}
-\caption{ Log mean log weights, $\bar{Z}$, and Fractional ESS (normalized by $K$) as a Function of Time for each sample budget. \textbf{Top Row:}  $\bar{Z}^\textsc{R}$ for the middlemost model (left), and $\bar{Z}^\textsc{C}$ the outermost model, (right). \textbf{Bottom Row:} The fractional ESS for each varying $K$ and $L$.  }
+\centerline{
+\rotatebox{90}{\hspace{6em}\scriptsize\textsf{ESS/K}\hspace{7em}\scriptsize\textsf{log $\mathsf{\bar{Z}}$}}
+\hspace{-0.2em}\includegraphics[width=0.95\columnwidth]{PLOT_A_4Part_Crop.pdf}}
+\caption{ Log mean log weights, $\log \bar{Z}$, and Fractional ESS (normalized by $K$) as a Function of Time for each sample budget. \textbf{Top Row:}  $\log \bar{Z}^\textsc{R}$ for the middlemost model (left), and $\log \bar{Z}^\textsc{C}$ the outermost model, (right). \textbf{Bottom Row:} The fractional ESS for each varying $K$ and $L$.  }
 %Varying sampling sizes for the respective outermost and middlemost model: 2048x1 (dark blue), 512x4 (blue), 128x16 (violet), 64x32 (green), 32x64 (red-brown), 16x128 (orange), 4x512 (light grey).    }
 \label{fig:log_means}
 % \label{fig:exps}
