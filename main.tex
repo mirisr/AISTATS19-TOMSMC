@@ -4,7 +4,7 @@
 % If your paper is accepted, change the options for the package
 % aistats2019 as follows:
 %
-\usepackage[]{aistats2019}
+\usepackage[arxiv]{aistats2019}
 
 \usepackage{graphicx}
 %\usepackage{subfigure}
@@ -248,8 +248,8 @@ The development of theory of mind in machines leads naturally to interaction wit
 
 Fully-developed theory of mind requires the possibility of nested beliefs. \textcite{koller1997effective} present an inference algorithm for recursive stochastic programs. \textcite{frith2005theory} argue that theory of mind can be modeled using probabilistic programming, and demonstrate examples of nested conditioning with the probabilistic programming language, Church. \textcite{zettlemoyer2009multi} address filtering in environments with many agents and infinitely nested beliefs. 
 
-There has thus far been comparatively little work on modeling theory of mind in a time-dependent manner. 
-\textcite{baker2009action} develop a computational framework based on action understanding as inverse planning. Similar to this work, we limit our study to a single agent reasoning about another agent. Our work differs in that our environment is not discretized into a grid world, and as such represents a continuous environment and action space, which is supported by random planning of Rapidly-Exploring Random Trees (RRTs) for decision making. More recently, \textcite{stuhlmuller2014reasoning} emphasized the value of probabilistic programs in modeling the reasoning of other agents. We build upon this work by modeling theory of mind in a more temporal setting, where agents must update and \textit{act upon} their beliefs of other agents.
+To our knowledge, our work is the first to model nested reasoning about agents in a time-dependent manner. Prior work by \textcite{baker2009action} develops a Bayesian framework for reasoning about preferences of individual agents based on observed time-dependent trajectories. Our work differs in that our environment is not discretized into a grid world, and as such represents a continuous action space. Work by \textcite{stuhlmuller2014reasoning} employed probabilistic programs to model nested reasoning about other agents. 
+Relative to this work, our work differs in that agents update and \textit{act upon} their beliefs of other agents in a time-dependent manner, whereas the work by \textcite{stuhlmuller2014reasoning} considers problems in which there is a single decision.
 
 % Fully-developed theory of mind requires the possibility of nested beliefs. \textcite{zettlemoyer2009multi} address filtering in environments with many agents and infinitely nested beliefs. \textcite{koller1997effective} present an inference algorithm for recursive stochastic programs, while \textcite{baker2009action} present a computational framework based on action understanding as inverse planning. More recently, \textcite{stuhlmuller2014reasoning} emphasized the value of probabilistic programs in modeling the reasoning of other agents. Finally, \textcite{frith2005theory} argue that theory of mind can be approximately represented using probabilistic programming, and demonstrate examples of nested conditioning with the probabilistic programming language, Church.
 
@@ -676,6 +676,7 @@ In this experiment, we perform $R=10$ independent episode restarts for $7$ combi
 
 In Figure~\ref{fig:log_means} (top row), we show the log mean log weights for the chaser (left) and runner (right) at each time point $t$. These  are computed as follows 
 \begin{align*}
+    \log
     \bar{Z}^\textsc{c}_t 
     &=\frac{1}{R}
     \sum_{r=1}^R 
@@ -694,6 +695,7 @@ In Figure~\ref{fig:log_means} (top row), we show the log mean log weights for th
     % \right]
     \right)
     \\
+    \log
     \bar{Z}^\textsc{r}_t 
     &=\frac{1}{R}
     \sum_{r=1}^R 
